@@ -42,7 +42,7 @@ func (server *Server) RawPut(_ context.Context, req *kvrpcpb.RawPutRequest) (*kv
 	// Your Code Here (1).
 	// Hint: Consider using Storage.Modify to store data to be modified
 	resp := new(kvrpcpb.RawPutResponse)
-	batch := []storage.Modify{{Data: storage.Put{Key: req.Key, Value: req.Value}}}
+	batch := []storage.Modify{{Data: storage.Put{Key: req.Key, Value: req.Value, Cf: req.Cf}}}
 	err := server.storage.Write(req.Context, batch)
 	if err != nil {
 		if regionErr, ok := err.(*raft_storage.RegionError); ok {
@@ -59,7 +59,7 @@ func (server *Server) RawDelete(_ context.Context, req *kvrpcpb.RawDeleteRequest
 	// Your Code Here (1).
 	// Hint: Consider using Storage.Modify to store data to be deleted
 	resp := new(kvrpcpb.RawDeleteResponse)
-	batch := []storage.Modify{{Data: storage.Delete{Key: req.Key}}}
+	batch := []storage.Modify{{Data: storage.Delete{Key: req.Key, Cf: req.Cf}}}
 	err := server.storage.Write(req.Context, batch)
 	if err != nil {
 		if regionErr, ok := err.(*raft_storage.RegionError); ok {
@@ -89,6 +89,9 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 	iter.Seek(req.StartKey)
 	pairs := make([]*kvrpcpb.KvPair, 0, req.Limit)
 	for i := req.Limit; i > 0; i-- {
+		if !iter.Valid() {
+			break
+		}
 		item := iter.Item()
 		key := item.KeyCopy(nil)
 		val, err := item.ValueCopy(nil)
@@ -96,6 +99,7 @@ func (server *Server) RawScan(_ context.Context, req *kvrpcpb.RawScanRequest) (*
 			return nil, err
 		}
 		pairs = append(pairs, &kvrpcpb.KvPair{Key: key, Value: val})
+		iter.Next()
 	}
 	resp.Kvs = pairs
 	return resp, nil
